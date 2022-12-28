@@ -1,0 +1,94 @@
+variant: fcos
+version: 1.4.0
+passwd:
+  users:
+    - name: core
+      groups:
+        - docker
+      password_hash: $y$j9T$bXdmkObHL/PFpP64KrGWz.$EVMThc5aG3yc0b9n/686zkMpe7WLoHtqBR4XEaDfqn5
+systemd:
+  units:
+    - name: docker.service
+      enabled: true
+    - name: containerd.service
+      enabled: true
+    - name: serial-getty@ttyS0.service
+      dropins:
+        - name: autologin-core.conf
+          contents: |
+            [Service]
+            # Override Execstart in main unit
+            ExecStart=
+            # Add new Execstart with `-` prefix to ignore failure
+            ExecStart=-/usr/sbin/agetty --autologin core --noclear %I $TERM
+            TTYVTDisallocate=no
+    - name: github-ssh-keys.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Copy ssh keys from github
+        After=network-online.target
+        Wants=network-online.target
+        [Service]
+        User=core
+        TimeoutStartSec=0
+        ExecStartPre=/usr/bin/echo 'Writing keys to:'
+        ExecStartPre=/usr/bin/echo ${HOME}/.ssh/authorized_keys.d/github
+        ExecStart=/usr/bin/curl https://github.com/heuristical.keys -o ${HOME}/.ssh/authorized_keys.d/github --create-dirs
+        [Install]
+        WantedBy=multi-user.target
+    - name: docker.qemu-guest-agent.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Qemu Guest Agent Docker Container
+        After=network-online.target
+        Wants=network-online.target
+        After=docker.service
+        Requires=docker.service
+        [Service]
+        TimeoutStartSec=0
+        ExecStartPre=-/usr/bin/docker rm --force qemu-ga
+        ExecStart=/usr/bin/docker run --name qemu-ga --privileged --net=host -v /dev:/dev -v /etc/os-release:/etc/os-release:ro docker.io/danskadra/qemu-ga qemu-ga
+        ExecStop=/usr/bin/docker stop qemu-ga
+        Restart=always
+        RestartSec=5s
+        [Install]
+        WantedBy=multi-user.target
+    - name: docker.portainer.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Portainer Admin Container
+        After=docker.service
+        Requires=docker.service network.target network-online.target
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        TimeoutStartSec=0
+        ExecStartPre=-/usr/bin/docker stop %n
+        ExecStartPre=-/usr/bin/docker rm %n
+        ExecStartPre=/usr/bin/docker pull portainer/portainer-ce
+        ExecStartPre=-/usr/bin/docker volume create portainer_data
+        # ExecStart=-/usr/bin/mkdir -p /mnt/shared_nfs/portainer_data
+        # https://dbafromthecold.com/2018/05/02/changing-the-location-of-docker-named-volumes/
+        # Privileged mode is required for binding to local socket to work due to SELINUX (https://github.com/portainer/portainer/issues/849)
+        ExecStart=/usr/bin/docker run --privileged=true -d -p 9000:9000 -p 9443:9443 --name %n --restart always -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data portainer/portainer-ce
+        ExecStop=/usr/bin/docker stop -t 15 %n
+
+        [Install]
+        WantedBy=multi-user.target
+storage:
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: |
+          myhostname
+    - path: /etc/profile.d/systemd-pager.sh
+      mode: 0644
+      contents:
+        inline: |
+          # Tell systemd to not use a pager when printing information
+          export SYSTEMD_PAGER=cat
