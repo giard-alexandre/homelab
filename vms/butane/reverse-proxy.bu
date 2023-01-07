@@ -85,7 +85,7 @@ storage:
       mode: 0644
       contents:
         inline: |
-          myhostname
+          fcos
     - path: /etc/profile.d/systemd-pager.sh
       mode: 0644
       contents:
