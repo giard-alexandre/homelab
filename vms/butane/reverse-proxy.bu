@@ -22,6 +22,18 @@ systemd:
             # Add new Execstart with `-` prefix to ignore failure
             ExecStart=-/usr/sbin/agetty --autologin core --noclear %I $TERM
             TTYVTDisallocate=no
+    # See https://github.com/coreos/docs/blob/master/os/mounting-storage.md#mounting-nfs-exports
+    # - name: var-www.mount
+    #   enable: true
+    #   contents: |
+    #     [Unit]
+    #     Before=remote-fs.target
+    #     [Mount]
+    #     What=nfs.example.com:/var/www
+    #     Where=/var/www
+    #     Type=nfs
+    #     [Install]
+    #     WantedBy=remote-fs.target
     - name: github-ssh-keys.service
       enabled: true
       contents: |
